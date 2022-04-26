@@ -19,6 +19,8 @@
  * along with u360gts.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+//#define DEBUG
+
 
 //#include "config.h"
 //#include "telemetry.h"
@@ -45,13 +47,28 @@
 //int16_t Roll angle ( rad / 10000 )
 //int16_t Yaw angle ( rad / 10000 
 //CRSF_FRAMETYPE_FLIGHT_MODE = 0x21,
+#define BARO_ALT_ID                    0x09
 #define LINK_STAT_ID                  0x14
-//uint8_t Uplink RSSI Ant. 1 ( dBm * -1 )
-//uint8_t Uplink RSSI Ant. 2 ( dBm * -1 )
-// uint8_t Uplink Package success rate / Link quality ( % 
+ /* 0x14 Link statistics
+ * Payload:
+ *
+ * uint8_t Uplink RSSI Ant. 1 ( dBm * -1 )
+ * uint8_t Uplink RSSI Ant. 2 ( dBm * -1 )
+ * uint8_t Uplink Package success rate / Link quality ( % )
+ * int8_t Uplink SNR ( db )
+ * uint8_t Diversity active antenna ( enum ant. 1 = 0, ant. 2 )
+ * uint8_t RF Mode ( enum 4fps = 0 , 50fps, 150hz)
+ * uint8_t Uplink TX Power ( enum 0mW = 0, 10mW, 25 mW, 100 mW, 500 mW, 1000 mW, 2000mW )
+ * uint8_t Downlink RSSI ( dBm * -1 )
+ * uint8_t Downlink package success rate / Link quality ( % )
+ * int8_t Downlink SNR ( db )
+ * Uplink is the connection from the ground to the UAV and downlink the opposite direction.
+ */
 #define TELEMETRY_RX_PACKET_SIZE       128
 
-
+const char *crsfActiveAntenna[2] = {"ANTENNA 1", "ANTENNA 2"};
+const char *crsrRfMode[3] = {"4 HZ", "50 HZ", "150_HZ"};
+const char *csrfRfPower[7] = {"0 mW", "10 mW", "25 mW", "100 mW", "500 mW", "1000 mW", "2000 mW" };
 
 uint8_t crc8(const uint8_t * ptr, uint32_t len);
 
@@ -63,6 +80,8 @@ uint8_t posCount = 0;
 uint16_t telemetry_voltage;
 uint32_t telemetry_lat;
 uint32_t telemetry_lon;
+float telemetry_lat_f;
+float telemetry_lon_f;
 float telemetry_speed;
 float telemetry_course;
 uint16_t telemetry_alt;
@@ -78,8 +97,10 @@ uint16_t telemetry_bat_remain;
 uint8_t telemetry_rssi_ant1;
 uint8_t telemetry_rssi_ant2;
 uint8_t telemetry_rssi_lq;
-uint8_t telemetry_rssi_divers;
-uint8_t telemetry_rssi_rfmode;
+uint8_t telemetry_rssi_snr;
+char* telemetry_rssi_divers;
+char* telemetry_rssi_rfmode;
+char* telemetry_rssi_rfpower;
 
 char* telemetry_fmode;
 
@@ -92,36 +113,14 @@ void CRSF_Decode(uint8_t *data, size_t length) {
   //uint8_t data[128] 
   //Serial.print("csrf_data1ength: ");
   //Serial.println((uint16_t) length);
+  memset(telemetryRxBuffer, 0, sizeof(telemetryRxBuffer));
+  
   if ((uint16_t) length > 6) {
     memcpy(telemetryRxBuffer, data, length);
-    //telemetryRxBuffer = data;
     processCrossfireTelemetryFrame();
   } 
-
-//  Serial.println("csrf_d1_e");
-//  Serial.print("Volt: ");
-//  Serial.println((uint16_t) telemetry_voltage);
-//  Serial.print("Lat: ");
-//  Serial.println((uint16_t) (telemetry_lat)/1E7, 7);
-//  Serial.print("Lon: ");
-//  Serial.println((uint16_t) (telemetry_lon)/1E7, 7);
-//  Serial.print("Speed: ");
-//  Serial.println((float) telemetry_speed);
-//  Serial.print("Alt: ");
-//  Serial.println((uint16_t) (telemetry_alt)/1E3, 0);
-//  Serial.print("Sats: ");
-//  Serial.println((uint16_t) telemetry_sats);
-//
-//  Serial.print("Error: ");
-//  Serial.println((int) telemetry_failed_cs);
-//  Serial.print("PosCount: ");
-//  Serial.println((int) posCount);
   return;
 }
-
-
-
-
 
 bool checkCrossfireTelemetryFrameCRC()
 {
@@ -129,7 +128,7 @@ bool checkCrossfireTelemetryFrameCRC()
   uint8_t len = telemetryRxBuffer[1];
 //  Serial.print("csrf_crc1_1");
 //  Serial.println((uint8_t) len);
-  if ( len > 9 ) {
+  if ( len > 6 ) {
     uint8_t crc = crc8(&telemetryRxBuffer[2], len-1);
 
     //unit8_t crc = ~crc8_le(
@@ -159,95 +158,151 @@ void processCrossfireTelemetryFrame()
   //Serial.println("csrf_process1");
   if (!checkCrossfireTelemetryFrameCRC()) {
     telemetry_failed_cs++;
-//    Serial.println("csrf_crc_failed");
+    Serial.println("csrf_crc_failed");
     return;
   }
-
-  if (telemetry_sats == 0) { 
-  telemetry_fixtype = 0; 
-  }
-  else if (telemetry_sats < 5 && telemetry_sats > 0) {
-     telemetry_fixtype = 2;
-     }
-  else {
-     telemetry_fixtype = 3;
-     } 
         
   uint8_t id = telemetryRxBuffer[2];
   int32_t value;
   switch(id) {
     case GPS_ID:
       if (getCrossfireTelemetryValue(4, 3, &value)){
-        telemetry_lat = (uint16_t) (value / 10);
+        //uav_lat = int32_t (value / 1E7);
+        uav_lat = int32_t (value);
         if(posCount == 0) posCount++;
+        #if defined(DEBUG) 
+          Serial.printf("Lat: %d\n", uav_lat); 
+        #endif
       }
       if (getCrossfireTelemetryValue(4, 7, &value)){
-        telemetry_lon = (uint16_t) (value / 10);
+        //uav_lon  = int32_t (value / 1E7);
+        uav_lon  = int32_t (value);
         if(posCount == 1) posCount++;
+        #if defined(DEBUG) 
+          Serial.printf("Lon: %d\n", uav_lon); 
+        #endif        
       }
-      if (getCrossfireTelemetryValue(2, 11, &value))
-        telemetry_speed = (float) (value / 100);
-      if (getCrossfireTelemetryValue(2, 13, &value))
-        telemetry_course = (float) value;
+      if (getCrossfireTelemetryValue(2, 11, &value)) {
+        uint16_t tmpspeed  = (uint16_t) (value);
+        uav_groundspeed  = (int) tmpspeed;
+        #if defined(DEBUG) 
+          Serial.printf("Speed: %d\n", tmpspeed); 
+        #endif
+      }
+        
+      if (getCrossfireTelemetryValue(2, 13, &value)) {
+        uav_gpsheading  = (int16_t) (value / 100);
+        #if defined(DEBUG)
+          Serial.printf("Heading: %d - \n", uav_gpsheading ); 
+        #endif
+      }
       if (getCrossfireTelemetryValue(2, 15, &value)){
-        telemetry_alt = (uint16_t) (value - 1000);
+        uav_alt  = (int32_t) ((value - 1000)* 100 );
         gotAlt = true;
+        #if defined(DEBUG)
+          Serial.printf("Höhe: %d \n", uav_alt  ); 
+        #endif        
       }
       if (getCrossfireTelemetryValue(1, 17, &value))
-        telemetry_sats = (uint16_t) value;
+        uav_satellites_visible  = (uint8_t) value;
+        #if defined(DEBUG)
+          //Serial.printf("Sats: %d \n", telemetry_alt ); 
+          Serial.printf("Sats/Lat/Lon/Alt: %d %d %d %d\n", uav_satellites_visible , uav_lat, uav_lon, uav_alt);
+        #endif        
+      
       break;
 
     case BAT_ID:
       if (getCrossfireTelemetryValue(2, 3, &value))
-        telemetry_voltage = (uint16_t) value;
+        uav_bat  = (uint16_t) (value * 100);
       if (getCrossfireTelemetryValue(2, 5, &value))
-        telemetry_current = (uint16_t) (value * 10);
+        uav_current  = (uint16_t) (value * 100);
       if (getCrossfireTelemetryValue(3, 7, &value))
-        telemetry_bat_capacity = (uint16_t) value;
+        uav_amp  = (uint16_t) value;
       if (getCrossfireTelemetryValue(1, 10, &value))
         telemetry_bat_remain = (uint16_t) value;
-      //Serial.printf("Volt/Current/Capac/Remain: %d %d %d %d\n", telemetry_voltage, telemetry_current, telemetry_bat_capacity, telemetry_bat_remain);
+      #if defined(DEBUG)
+        Serial.printf("Volt/Current/Capac/Remain: %d %d %d %d\n", uav_bat , uav_current , uav_amp, telemetry_bat_remain);
+      #endif  
+
       break;
 
      case ATTI_ID:
-       Serial.printf("atti");
+       //Serial.printf("atti");
        if (getCrossfireTelemetryValue(2, 3, &value))
-        telemetry_att_pitch = (uint16_t) (value / 10);
+        uav_pitch  = (int16_t) (value / 10);
        if (getCrossfireTelemetryValue(2, 5, &value))
-        telemetry_att_pitch = (uint16_t) (value / 10);
+        uav_roll  = (int16_t) (value / 10);
        if (getCrossfireTelemetryValue(2, 7, &value))
-        telemetry_att_yaw = (uint16_t) (value / 10);
-       //Serial.printf("Pit/Rol/Yaw: %d %d %d\n", telemetry_att_pitch, telemetry_att_pitch, telemetry_att_yaw);
+        uav_heading  = (int16_t) (value / 10);
+       #if defined(DEBUG)        
+         Serial.printf("Pit/Rol/Yaw: %d %d %d\n", telemetry_att_pitch, telemetry_att_roll, telemetry_att_yaw);
+       #endif
        break;
        
 
      case LINK_STAT_ID:
        //Serial.println("Link");
        if (getCrossfireTelemetryValue(1, 3, &value))
-        telemetry_rssi_ant1 = (uint8_t) (value - 1);
+        //uint8_t rssinegdbm  = (uint8_t) (value - 1);
+        //uint8_t rssitmp =  (100 - (rssinegdbm / 130))
+        //uav_rssi  = (uint8_t) (value - 1);
+        uav_rssi = (uint8_t) (100 - ((value - 1) / 130));
        if (getCrossfireTelemetryValue(1, 4, &value))
         telemetry_rssi_ant2 = (uint8_t) (value - 1);
        if (getCrossfireTelemetryValue(1, 5, &value))
-        telemetry_rssi_lq = (uint8_t) (value);
-       Serial.printf("Ant1/Ant2/LQ: %d %d %d\n", telemetry_rssi_ant1, telemetry_rssi_ant2, telemetry_rssi_lq);
-       break;
+        uav_linkquality  = (uint8_t) (value);
+       if (getCrossfireTelemetryValue(1, 6, &value))
+        telemetry_rssi_snr = (int8_t) (value);
+       if (getCrossfireTelemetryValue(1, 7, &value)) {
+          uint8_t rfantidx = (uint8_t) (value);
+          telemetry_rssi_divers = (char*) crsfActiveAntenna[rfantidx];  
+       }
+       if (getCrossfireTelemetryValue(1, 8, &value)) {
+          uint8_t rfidx = (uint8_t) (value);
+          telemetry_rssi_rfmode = (char*) crsrRfMode[rfidx];  
+       }
+       if (getCrossfireTelemetryValue(1, 9, &value)) {
+          uint8_t rfpowidx = (uint8_t) (value);
+          telemetry_rssi_rfpower = (char*) csrfRfPower[rfpowidx];  
+       }
+
+       #if defined(DEBUG)        
+         Serial.printf("Ant1/Ant2/LQ/SNR: %d %d %d  %d ", uav_rssi, telemetry_rssi_ant2, uav_linkquality, telemetry_rssi_snr);
+         //Serial.println(telemetry_rssi_divers);
+         Serial.printf("SNR/Dive/: %d %d %d\n", telemetry_rssi_snr, telemetry_rssi_divers);
+         Serial.printf("RfMode: %s  RfPower: %s\n", telemetry_rssi_rfmode, telemetry_rssi_rfpower);
+       #endif
+      break;
+
 
      case FMODE_ID:
         if (getCrossfireTelemetryValue(2, 3, &value)) {
-            auto textLength = min<int>(16, telemetryRxBuffer[1]);
-    //        telemetryRxBuffer[textLength] = '\0';
-    //        telemetry_fmode = (char*) telemetryRxBuffer + 3;
+          auto textLength = min<int>(16, telemetryRxBuffer[1]);
+          telemetryRxBuffer[textLength] = '\0';
+          telemetry_fmode = (char*) telemetryRxBuffer + 3;
+          #if defined(DEBUG)                
             Serial.print("fmode: ");
             Serial.println(telemetry_fmode);
+          #endif
         }
         break;
     }
 
+  if (uav_satellites_visible == 0) { 
+    uav_fix_type = 0; 
+  }
+  else if (uav_satellites_visible < 5 && uav_satellites_visible > 0) {
+     uav_fix_type = 2;
+     }
+  else {
+     uav_fix_type = 3;
+     } 
   
   if(posCount == 2 ) {
     posCount = 0;
     gotFix = true;
-    Serial.printf("Sats/Lat/Lon/Alt: %d %d %d %d\n", telemetry_sats, telemetry_lat, telemetry_lon, telemetry_alt);
+    //Serial.printf("Sats/Lat/Lon/Alt/Spd/Heading: %d %f %f %d %.2f %.2f\n", telemetry_sats, telemetry_lat_f, telemetry_lon_f, telemetry_alt, telemetry_speed, telemetry_course);
   }
 }
 
