@@ -1,29 +1,12 @@
-#include <esp_task_wdt.h>
-//3 seconds WDT
-#define WDT_TIMEOUT 10
-
 /**
  * A BLE client example that is rich in capabilities.
  * There is a lot new capabilities implemented.
  * author unknown
  * updated by chegewara
+ * befummelt von ari
  */
-extern uint16_t telemetry_voltage;
-extern uint32_t telemetry_lat;
-extern uint32_t telemetry_lon;
-extern float telemetry_speed;
-extern float telemetry_course;
-extern uint16_t telemetry_alt;
-extern uint16_t telemetry_sats;
-extern int telemetry_failed_cs;
-extern uint16_t telemetry_att_pitch;
-extern uint16_t telemetry_att_roll;
-extern uint16_t telemetry_att_yaw;
-extern uint16_t telemetry_current;
-extern char* telemetry_fmode;
 
-
-
+#include <esp_task_wdt.h>
 #include "BLEDevice.h"
 //#include "BLEScan.h"
 #include <SPI.h>
@@ -47,11 +30,9 @@ static BLEUUID    charUUID("0000fff6-0000-1000-8000-00805f9b34fb");
 //0000fff0-000-1000-8000-00805f9b34fb
 //01020304-
 
-static boolean doConnect = false;
-static boolean connected = false;
-static boolean doScan = false;
-static boolean bluetooth = false;
-static boolean wlan = false;
+
+//10 seconds WDT
+#define WDT_TIMEOUT 10
 
 //const int buttonPin = 25;    
 
@@ -81,18 +62,38 @@ static boolean wlan = false;
 
 //#define DEBUG 
 
-
-
 //Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// ltm send delay
+const int anzeigeupdate = 1;
+
+static boolean doConnect = false;
+static boolean connected = false;
+static boolean doScan = false;
+static boolean bluetooth = false;
+static boolean wlan = false;
 
 static BLERemoteCharacteristic* pRemoteCharacteristic;
 static BLEAdvertisedDevice* myDevice;
 
-const int anzeigeupdate = 1;
 static unsigned long previousMillis = 0;  
 int crosscounter = 0;
 unsigned long previousMilliscb = 0;
+
+extern uint16_t telemetry_voltage;
+extern uint32_t telemetry_lat;
+extern uint32_t telemetry_lon;
+extern float telemetry_speed;
+extern float telemetry_course;
+extern uint16_t telemetry_alt;
+extern uint16_t telemetry_sats;
+extern int telemetry_failed_cs;
+extern uint16_t telemetry_att_pitch;
+extern uint16_t telemetry_att_roll;
+extern uint16_t telemetry_att_yaw;
+extern uint16_t telemetry_current;
+extern char* telemetry_fmode;
 
 
 static void notifyCallback(
@@ -263,29 +264,19 @@ void setup() {
   //Wire.begin(4, 15);
   //Wire.begin(5, 17);
   Wire.begin(SDA, SCL);
-  
-   
 
-//  pinMode(16, OUTPUT);
-//  digitalWrite(16, HIGH); 
-//  digitalWrite(16, LOW); 
   Serial.println("Starting BLE Client");
   //pinMode(buttonPin, INPUT);
-
-  //U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ 15, /* data=*/ 4, /* reset=*/ 16);
-
 
   if(!display.begin(SSD1306_SWITCHCAPVCC , SCREEN_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed"));
     for(;;);
   } else {
-    // Clear the buffer.
     display.clearDisplay();
-    delay(1000); // Pause for 2 seconds
-    display.setTextSize(1);             // Normal 1:1 pixel scale
-    //display.setTextColor(SSD1306_WHITE);        // Draw white text
+    delay(1000); 
+    display.setTextSize(1);             
     display.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
-    display.setCursor(0,0);             // Start at top-left corner
+    display.setCursor(0,0);         
     display.println(F("Start BLE Client..."));
     display.display();
   }
@@ -345,10 +336,8 @@ void loop() {
   // If we are connected to a peer BLE Server, update the characteristic each time we are reached
   // with the current time since boot.
   if (connected) {
-      
       String newValue = "Time since boot: " + String(millis()/1000);
       //Serial.println("Setting new characteristic value to \"" + newValue + "\"");
-     
       // Set the characteristic's value to be the array of bytes that is actually a string.
       pRemoteCharacteristic->writeValue(newValue.c_str(), newValue.length());
 
@@ -363,26 +352,7 @@ void loop() {
       display.display();
       BLEDevice::getScan()->start(5);  // this is just example to start scan after disconnect, most likely there is better way to do it in arduino
   }
-  //Serial.print(".");
   doScan = true;
-  delay(1000); // Delay a second between loops.
-//  Serial.println("csrf_d1_e");
-//  Serial.print("Volt: ");
-//  Serial.println((uint16_t) telemetry_voltage);
-//  Serial.print("Lat: ");
-//  Serial.println((uint16_t) (telemetry_lat)/1E7, 7);
-//  Serial.print("Lon: ");
-//  Serial.println((uint16_t) (telemetry_lon)/1E7, 7);
-//  Serial.print("Speed: ");
-//  Serial.println((float) telemetry_speed);
-//  Serial.print("Alt: ");
-//  Serial.println((uint16_t) (telemetry_alt)/1E3, 0);
-//  Serial.print("Sats: ");
-//  Serial.println((uint16_t) telemetry_sats);
-//
-//  
-//  Serial.print("Error: ");
-//  Serial.println((int) telemetry_failed_cs);
-
+  delay(1000); 
   
-} // End of loop
+} 

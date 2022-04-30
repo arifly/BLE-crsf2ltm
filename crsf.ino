@@ -285,6 +285,55 @@ void processCrossfireTelemetryFrame()
             Serial.print("fmode: ");
             Serial.println(telemetry_fmode);
           #endif
+          
+          if (strcmp(telemetry_fmode, "Manual") == 0) {
+            uav_flightmode = 0;
+          } else if (strcmp(telemetry_fmode, "Rate") == 1) {
+            uav_flightmode = 1;
+          } else if (strcmp(telemetry_fmode, "Attitude/Angle") == 2) {
+            uav_flightmode = 2;
+          } else if (strcmp(telemetry_fmode, "Horizon") == 3) {
+            uav_flightmode = 3;
+          } else if (strcmp(telemetry_fmode, "Acro") == 4) {
+            uav_flightmode = 4;
+          } else if (strcmp(telemetry_fmode, "Stabilized 1") == 5) {
+            uav_flightmode = 5;
+          } else if (strcmp(telemetry_fmode, "Stabilized 2") == 6) {
+            uav_flightmode = 6;                        
+          } else if (strcmp(telemetry_fmode, "Stabilized 3") == 7) {
+            uav_flightmode = 7;
+          } else if (strcmp(telemetry_fmode, "Altitude Hold") == 8) {
+            uav_flightmode = 8;
+          } else if (strcmp(telemetry_fmode, "Loiter/GPS Hold") == 9) {
+            uav_flightmode = 9;
+          } else if (strcmp(telemetry_fmode, "Auto/Waypoints") == 10) {
+            uav_flightmode = 10;
+          } else if (strcmp(telemetry_fmode, "Heading Hold/Head Free") == 11) {
+            uav_flightmode = 11;
+          } else if (strcmp(telemetry_fmode, "Circle") == 12) {
+            uav_flightmode = 12;
+          } else if (strcmp(telemetry_fmode, "RTH") == 13) {
+            uav_flightmode = 13;
+          } else if (strcmp(telemetry_fmode, "Follow Me") == 14) {
+            uav_flightmode = 14;
+          } else if (strcmp(telemetry_fmode, "Land") == 15) {
+            uav_flightmode = 15;
+          } else if (strcmp(telemetry_fmode, "FlybyWire A") == 16) {
+            uav_flightmode = 16;   
+          } else if (strcmp(telemetry_fmode, "FlybyWire B") == 17) {
+            uav_flightmode = 17;
+          } else if (strcmp(telemetry_fmode, "Cruise") == 18) {
+            uav_flightmode = 18;
+          } else if (strcmp(telemetry_fmode, "Unknown") == 19) {
+            uav_flightmode = 19;
+          } else {
+            uav_flightmode = 19;
+          }
+
+
+          #if defined(DEBUG)                
+            //Serial.printf("FMode/LTM-FMode: %s %d\n",telemetry_fmode, uav_flightmode);
+          #endif
         }
         break;
     }
@@ -381,3 +430,5 @@ uint8_t crc8(const uint8_t *ptr, uint32_t len)
   }
   return crc;
 }
+
+
